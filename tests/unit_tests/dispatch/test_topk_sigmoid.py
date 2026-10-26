@@ -56,3 +56,45 @@ def test_float16_input_is_computed_in_float32():
     weights, indices, _ = _run_topk(logits, topk=2)
     assert indices.tolist() == [[0, 1]]
     torch.testing.assert_close(weights[0], torch.sigmoid(logits.float())[0, [0, 1]])
+
+
+def test_cuda_native_sigmoid_availability_tracks_compiled_op(monkeypatch):
+    from types import SimpleNamespace
+
+    from vllm_fl.dispatch.backends.vendor.cuda.cuda import CudaBackend
+
+    backend = CudaBackend()
+    monkeypatch.setattr(CudaBackend, "is_available", lambda self: True)
+    monkeypatch.setattr(torch.ops, "_moe_C", SimpleNamespace(), raising=False)
+    assert not backend.has_native_topk_sigmoid()
+    monkeypatch.setattr(
+        torch.ops, "_moe_C", SimpleNamespace(topk_sigmoid=object()), raising=False
+    )
+    assert backend.has_native_topk_sigmoid()
+    monkeypatch.setattr(CudaBackend, "is_available", lambda self: False)
+    assert not backend.has_native_topk_sigmoid()
+
+
+def test_cuda_sigmoid_preserves_native_out_buffer_contract(monkeypatch):
+    from vllm import _custom_ops
+    from vllm_fl.dispatch.backends.vendor.cuda.cuda import CudaBackend
+
+    calls = []
+    monkeypatch.setattr(_custom_ops, "topk_sigmoid", lambda *args: calls.append(args))
+    weights = torch.empty(2, 3, dtype=torch.float32)
+    indices = torch.empty(2, 3, dtype=torch.int32)
+    rows = torch.empty(2, 3, dtype=torch.int32)
+    logits = torch.randn(2, 8)
+    bias = torch.randn(8)
+    returned = CudaBackend().topk_sigmoid(
+        weights, indices, rows, logits, True, bias
+    )
+    assert returned[0] is weights and returned[1] is indices
+    assert len(calls) == 1 and len(calls[0]) == 6
+    assert all(
+        actual is expected
+        for actual, expected in zip(
+            calls[0][:4], (weights, indices, rows, logits)
+        )
+    )
+    assert calls[0][4] is True and calls[0][5] is bias
