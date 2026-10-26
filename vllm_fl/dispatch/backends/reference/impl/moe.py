@@ -24,6 +24,10 @@ def topk_sigmoid_torch(
         else scores
     )
     topk = topk_indices.shape[-1]
+    if not 1 <= topk <= gating_output.shape[-1]:
+        raise ValueError(
+            f"topk must be between 1 and num_experts, got {topk}"
+        )
     chosen = []
     for _ in range(topk):
         index = selection.argmax(dim=-1, keepdim=True)
