@@ -239,9 +239,8 @@ class FusedTopKBiasRouterFL(FusedTopKBiasRouter):
         *,
         input_ids: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        # The upstream sigmoid route requires a compiled CUDA _moe_C
-        # topk_sigmoid operator. Dispatch the sigmoid+bias path through
-        # the portable reference backend when the extension is absent.
+        # Dispatch sigmoid+bias to the native CUDA kernel when available;
+        # CUDA-less vendor wheels fall back to the PyTorch reference.
         if self.scoring_func == "sigmoid" and not rocm_aiter_ops.is_fused_moe_enabled():
             assert hidden_states.size(0) == router_logits.size(0)
             num_tokens = hidden_states.size(0)
