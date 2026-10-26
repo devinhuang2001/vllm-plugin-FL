@@ -98,3 +98,13 @@ def test_cuda_sigmoid_preserves_native_out_buffer_contract(monkeypatch):
         )
     )
     assert calls[0][4] is True and calls[0][5] is bias
+
+
+def test_topk_outside_expert_count_fails():
+    """An invalid k must not silently reuse experts after all are exhausted."""
+    import pytest
+
+    logits = torch.tensor([[1.0, 2.0]])
+    for invalid_k in (0, 3):
+        with pytest.raises(ValueError, match="topk"):
+            _run_topk(logits, topk=invalid_k)
