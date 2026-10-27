@@ -10,10 +10,14 @@ import torch
 
 
 @pytest.fixture
-def routing_dispatch():
+def routing_dispatch(device, has_accelerator):
     from vllm_fl.dispatch.manager import reset_default_manager
     from vllm_fl.dispatch.policy import SelectionPolicy, policy_context
 
+    assert not has_accelerator or device.type != "cpu", (
+        "The configured accelerator mapped to CPU in the device fixture; "
+        "fix the platform/device configuration before claiming a device run."
+    )
     reset_default_manager()
     with policy_context(SelectionPolicy(prefer="vendor", strict=True)):
         yield
@@ -72,7 +76,9 @@ def test_real_dispatch_matches_stable_score_oracle(
         and native_installed
     )
     expected_impl = "vendor.cuda" if native_expected else "reference.torch"
-    assert manager.resolve_candidates("topk_sigmoid")[0].impl_id == expected_impl
+    registered = manager.registry.get_implementation("topk_sigmoid", expected_impl)
+    assert registered is not None
+    assert fn is registered.fn
 
 
 def test_real_vllm_router_preserves_bias_indices_and_scaling(routing_dispatch, device):
