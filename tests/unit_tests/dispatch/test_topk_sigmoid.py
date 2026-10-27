@@ -77,6 +77,7 @@ def test_cuda_native_sigmoid_availability_tracks_compiled_op(monkeypatch):
 
 def test_cuda_sigmoid_preserves_native_out_buffer_contract(monkeypatch):
     from vllm import _custom_ops
+
     from vllm_fl.dispatch.backends.vendor.cuda.cuda import CudaBackend
 
     calls = []
@@ -86,16 +87,12 @@ def test_cuda_sigmoid_preserves_native_out_buffer_contract(monkeypatch):
     rows = torch.empty(2, 3, dtype=torch.int32)
     logits = torch.randn(2, 8)
     bias = torch.randn(8)
-    returned = CudaBackend().topk_sigmoid(
-        weights, indices, rows, logits, True, bias
-    )
+    returned = CudaBackend().topk_sigmoid(weights, indices, rows, logits, True, bias)
     assert returned[0] is weights and returned[1] is indices
     assert len(calls) == 1 and len(calls[0]) == 6
     assert all(
         actual is expected
-        for actual, expected in zip(
-            calls[0][:4], (weights, indices, rows, logits)
-        )
+        for actual, expected in zip(calls[0][:4], (weights, indices, rows, logits))
     )
     assert calls[0][4] is True and calls[0][5] is bias
 
